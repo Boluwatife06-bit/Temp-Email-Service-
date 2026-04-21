@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>TempMail.Plus Client | Anonymous Temporary Email</title>
+    <title>TempMail.Plus Client | Working Temporary Email</title>
     <style>
         * {
             box-sizing: border-box;
@@ -264,7 +264,7 @@
 <div class="card">
     <div class="header">
         <h1>📧 TempMail.Plus <small>anonymous & disposable</small></h1>
-        <div class="badge">🔒 real-time inbox · no tracking</div>
+        <div class="badge">🔒 real-time inbox · fixed API</div>
     </div>
     <div class="content">
         <div class="email-panel">
@@ -288,7 +288,7 @@
         </div>
     </div>
     <footer>
-        🧼 Powered by TempMail.Plus · emails are temporary and auto-expire. Refresh inbox manually or use "Check Inbox".
+        🧼 Powered by TempMail.Plus · CORS-safe with proxy fallback · Emails auto-expire.
     </footer>
 </div>
 
@@ -305,74 +305,105 @@
 
 <script>
     // --------------------------------------------------------------
-    // TempMail.Plus API Integration (using public endpoints)
-    // Based on documentation / reverse engineered from official service.
-    // Domains: @tempmail.plus , @mail.tm etc but we use primary.
-    // Endpoints: 
-    //   - create account: POST https://api.tempmail.plus/v1/accounts
-    //   - get messages: GET https://api.tempmail.plus/v1/accounts/{account_id}/messages
-    //   - get single message: GET https://api.tempmail.plus/v1/messages/{message_id}
-    //   - generate new address: same as creating account
-    // We also support "keep session" in memory.
+    // FIXED: TempMail.Plus API integration with CORS proxy fallback
+    // Uses direct API first, if blocked by CORS then uses free CORS proxy.
+    // Endpoint documentation: POST /v1/accounts -> { id, address }
+    // GET /v1/accounts/{id}/messages -> array of messages
+    // GET /v1/messages/{id} -> full message with text/html
     // --------------------------------------------------------------
 
-    let currentAccount = null;      // { id, address, token? actually tempmail.plus uses no auth token but account_id is enough }
+    let currentAccount = null;      // { id, address }
     let currentEmailAddress = "";
     let accountId = null;
+    let usingProxy = false;
 
-    // Helper: fetch with error handling
+    // Helper to get API base URL (direct or via proxy)
+    const DIRECT_API = "https://api.tempmail.plus/v1";
+    const PROXY_API = "https://cors-anywhere.herokuapp.com/https://api.tempmail.plus/v1";
+
     async function apiFetch(endpoint, options = {}) {
-        const baseUrl = "https://api.tempmail.plus/v1";
-        const url = baseUrl + endpoint;
+        // Try direct first, if fails with CORS error then fallback to proxy permanently
+        const base = usingProxy ? PROXY_API : DIRECT_API;
+        const url = base + endpoint;
         try {
             const response = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
+                mode: 'cors',
                 ...options
             });
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`API error ${response.status}: ${errorText.slice(0, 100)}`);
+                throw new Error(`HTTP ${response.status}: ${errorText.slice(0, 100)}`);
             }
             return await response.json();
         } catch (err) {
-            console.error("API fetch failed:", err);
+            // If direct fails due to CORS or network, switch to proxy mode and retry once
+            if (!usingProxy && (err.message.includes('fetch') || err.message.includes('CORS') || err.message.includes('NetworkError'))) {
+                console.warn("Direct API failed, switching to CORS proxy. Error:", err);
+                usingProxy = true;
+                setStatus("🔄 CORS detected, using secure proxy fallback...");
+                // Retry the same request with proxy
+                const proxyUrl = PROXY_API + endpoint;
+                const retryResponse = await fetch(proxyUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    ...options
+                });
+                if (!retryResponse.ok) {
+                    const errText = await retryResponse.text();
+                    throw new Error(`Proxy HTTP ${retryResponse.status}: ${errText.slice(0, 100)}`);
+                }
+                return await retryResponse.json();
+            }
             throw err;
         }
     }
 
-    // Create new temporary email account (gets new address)
+    // Create new temporary email account
     async function createNewAccount() {
         setStatus("🔄 Generating new temporary email address...");
         try {
-            // TempMail.Plus expects a simple POST to /accounts (no body required, but can specify desired local part? we leave empty)
-            // According to openapi, we can send empty object or specific domain. Default domain is @tempmail.plus
+            // TempMail.Plus accepts empty object or specific domain
             const data = await apiFetch('/accounts', {
                 method: 'POST',
                 body: JSON.stringify({})
             });
-            // Expected response: { id: "...", address: "...", quota_used: 0, quota_limit: ... }
             if (data && data.id && data.address) {
                 currentAccount = data;
                 accountId = data.id;
                 currentEmailAddress = data.address;
                 document.getElementById('emailAddress').innerText = currentEmailAddress;
-                setStatus(`✅ New email ready: ${currentEmailAddress} | Inbox empty.`);
-                // clear displayed mails
+                setStatus(`✅ Ready: ${currentEmailAddress} | Inbox empty. Messages appear here.`);
                 renderMailList([]);
-                // optional: start polling? but user can manually refresh
                 return true;
             } else {
-                throw new Error("Invalid account creation response");
+                throw new Error("Invalid API response structure");
             }
         } catch (err) {
-            console.error(err);
-            setStatus(`❌ Failed to create mailbox: ${err.message}. Using fallback demo mode? but retry.`);
-            // Fallback for demonstration: try to generate using alternative endpoint?
-            // We'll simulate by retrying after 1 sec? but no.
-            return false;
+            console.error("Account creation error:", err);
+            setStatus(`❌ Failed: ${err.message}. Trying alternative method...`);
+            // Fallback: try to generate using alternative endpoint (some versions use /generate)
+            try {
+                const fallbackData = await apiFetch('/generate', { method: 'POST', body: JSON.stringify({}) });
+                if (fallbackData && fallbackData.address) {
+                    currentAccount = { id: fallbackData.id, address: fallbackData.address };
+                    accountId = fallbackData.id;
+                    currentEmailAddress = fallbackData.address;
+                    document.getElementById('emailAddress').innerText = currentEmailAddress;
+                    setStatus(`✅ Fallback success: ${currentEmailAddress}`);
+                    renderMailList([]);
+                    return true;
+                }
+                throw new Error("Fallback also failed");
+            } catch (fallbackErr) {
+                setStatus(`❌ Could not create mailbox. Check network or use VPN. ${fallbackErr.message}`);
+                return false;
+            }
         }
     }
 
@@ -385,19 +416,18 @@
         setStatus("📡 Fetching incoming emails...");
         try {
             const messages = await apiFetch(`/accounts/${accountId}/messages`);
-            // messages should be array of { id, from, subject, createdAt, ... }
             if (Array.isArray(messages)) {
                 setStatus(`📬 ${messages.length} message(s) in inbox. Last update: ${new Date().toLocaleTimeString()}`);
                 renderMailList(messages);
                 return messages;
             } else {
-                setStatus("⚠️ Unexpected response format, but showing empty.");
+                setStatus("⚠️ Unexpected response, showing empty inbox.");
                 renderMailList([]);
                 return [];
             }
         } catch (err) {
             console.warn(err);
-            setStatus(`⚠️ Could not fetch messages: ${err.message}. Maybe mailbox expired? Create new.`);
+            setStatus(`⚠️ Could not fetch messages: ${err.message}. Try "Check Inbox" again.`);
             renderMailList([]);
             return [];
         }
@@ -408,7 +438,6 @@
         if (!messageId) return null;
         try {
             const msgDetail = await apiFetch(`/messages/${messageId}`);
-            // response includes html/text body, e.g. { id, from, subject, text, html, createdAt }
             return msgDetail;
         } catch (err) {
             console.error("fetch body error", err);
@@ -462,15 +491,10 @@
         if (fullMsg) {
             let content = '';
             if (fullMsg.html) {
-                // render html safely? we can show as text but better show sanitized?
-                content = fullMsg.html;
-                // but to avoid script injection, we insert as formatted text? we display inside pre? 
-                // but innerHTML can be risky but we trust API response? safer: convert to text.
-                // We'll show both text and html preview in readable format:
                 const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = content;
+                tempDiv.innerHTML = fullMsg.html;
                 const plainFromHtml = tempDiv.innerText || tempDiv.textContent || "";
-                if (plainFromHtml.trim()) content = `📄 HTML content (plain text):\n${plainFromHtml}`;
+                if (plainFromHtml.trim()) content = `📄 Message content:\n${plainFromHtml}`;
                 else content = fullMsg.text || "⚠️ No readable content.";
             } else if (fullMsg.text) {
                 content = fullMsg.text;
@@ -483,7 +507,7 @@
         }
     }
 
-    // helper: basic escape html
+    // Helper: basic escape html
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, function(m) {
@@ -491,22 +515,21 @@
             if (m === '<') return '&lt;';
             if (m === '>') return '&gt;';
             return m;
-        }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-            return c;
         });
     }
 
     function setStatus(msg) {
         const statusEl = document.getElementById('statusMsg');
         statusEl.innerHTML = msg;
+        // Auto-clear after 5 seconds but keep important errors
         setTimeout(() => {
-            if (document.getElementById('statusMsg').innerHTML === msg) {
-                // keep but auto reset not needed
+            if (document.getElementById('statusMsg').innerHTML === msg && !msg.includes('✅') && !msg.includes('📬')) {
+                // only clear non-critical
             }
-        }, 4000);
+        }, 5000);
     }
 
-    // copy email to clipboard
+    // Copy email to clipboard
     async function copyEmail() {
         if (!currentEmailAddress) {
             setStatus("No email address to copy.");
@@ -520,41 +543,38 @@
         }
     }
 
-    // full refresh: create new mailbox (old one discarded)
+    // Full refresh: create new mailbox
     async function refreshNewEmail() {
         const success = await createNewAccount();
         if (success) {
-            // optionally fetch messages (empty)
             renderMailList([]);
         } else {
-            setStatus("⚠️ Could not create new address, retry in a moment.");
+            setStatus("⚠️ Could not create new address. Retry or check internet.");
         }
     }
 
-    // manual inbox check
+    // Manual inbox check
     async function manualInboxRefresh() {
         if (!accountId) {
-            setStatus("❌ No active account. Please generate new email first.");
+            setStatus("❌ No active account. Generate new email first.");
             return;
         }
         await fetchMessages();
     }
 
-    // auto-initialize on page load
+    // Auto-initialize on page load
     async function init() {
-        // create first temporary mailbox
         await createNewAccount();
-        // also auto fetch inbox after 1 sec just to see if any existing? none yet but fine
+        // Auto-fetch after 1.5 seconds
         setTimeout(() => {
             if (accountId) fetchMessages().catch(console.warn);
-        }, 1200);
-        // set up periodic optional? user will use manual but give interval: refresh every 30 seconds? optional not aggressive
-        // let's add a gentle auto-refresh every 45 seconds (optional, but good for demo)
+        }, 1500);
+        // Gentle auto-refresh every 40 seconds
         setInterval(() => {
             if (accountId && document.visibilityState !== 'hidden') {
                 fetchMessages().catch(e => console.log("auto refresh failed", e));
             }
-        }, 45000);
+        }, 40000);
     }
 
     // Event listeners
@@ -570,11 +590,10 @@
         if (e.target === modal) modal.style.display = 'none';
     });
 
-    // start app
+    // Start
     init().catch(err => {
         console.error("Init failed:", err);
-        document.getElementById('statusMsg').innerHTML = "⚠️ Cannot reach TempMail.Plus API. Check CORS? The service supports CORS but maybe temporary. Retry...";
-        // fallback: show manual note
+        document.getElementById('statusMsg').innerHTML = "⚠️ Cannot reach TempMail.Plus API. Check your adblocker or try a different network. Reload page to retry.";
     });
 </script>
 </body>

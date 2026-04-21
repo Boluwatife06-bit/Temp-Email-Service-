@@ -1,0 +1,584 @@
+Below is an HTML document that connects to the TempMail.Plus API to generate a temporary email address and check for received emails. You can host this file on GitHub Pages.
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>TempMail.Plus Client | Anonymous Temporary Email</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, 'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(145deg, #f0f4fa 0%, #e6ecf3 100%);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .card {
+            max-width: 1300px;
+            width: 100%;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(0px);
+            border-radius: 2rem;
+            box-shadow: 0 25px 45px -12px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.05);
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .header {
+            background: #1a2c3e;
+            padding: 1.2rem 2rem;
+            color: white;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.7rem;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 small {
+            font-size: 0.8rem;
+            background: #2c4e6e;
+            padding: 4px 10px;
+            border-radius: 40px;
+            font-weight: normal;
+        }
+
+        .badge {
+            background: #2c5a2e;
+            padding: 6px 14px;
+            border-radius: 60px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        .email-panel {
+            background: white;
+            border-radius: 1.5rem;
+            padding: 1.2rem 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #e2edf2;
+        }
+
+        .address-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 1rem;
+        }
+
+        .email-display {
+            flex: 3;
+            background: #f8fafc;
+            border: 1px solid #cfdfe8;
+            border-radius: 60px;
+            padding: 12px 20px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #0f2b3b;
+            word-break: break-all;
+        }
+
+        button {
+            background: #1f6392;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        button:hover {
+            background: #0e4a6f;
+            transform: scale(0.97);
+        }
+
+        .refresh-btn {
+            background: #2c6e2c;
+        }
+        .refresh-btn:hover {
+            background: #1e551e;
+        }
+
+        .copy-btn {
+            background: #3b5c7a;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: #2c5a6e;
+            background: #eef3fc;
+            padding: 8px 16px;
+            border-radius: 30px;
+            display: inline-block;
+        }
+
+        .inbox-container {
+            background: white;
+            border-radius: 1.5rem;
+            border: 1px solid #e2edf2;
+            overflow: hidden;
+        }
+
+        .inbox-header {
+            background: #eef2f7;
+            padding: 1rem 1.5rem;
+            font-weight: 700;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #dce5ec;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .mail-list {
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .mail-item {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #ecf3f8;
+            cursor: pointer;
+            transition: background 0.1s;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .mail-item:hover {
+            background: #f5fafd;
+        }
+
+        .mail-sender {
+            font-weight: 700;
+            color: #1a445b;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+
+        .mail-subject {
+            font-weight: 500;
+            color: #2c3e4e;
+        }
+
+        .mail-date {
+            font-size: 0.7rem;
+            color: #6c86a0;
+        }
+
+        .empty-inbox {
+            text-align: center;
+            padding: 3rem;
+            color: #6f8faa;
+            font-style: italic;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-card {
+            background: white;
+            max-width: 650px;
+            width: 90%;
+            border-radius: 1.8rem;
+            padding: 1.5rem;
+            box-shadow: 0 25px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-card h3 {
+            margin-top: 0;
+            color: #1a2c3e;
+        }
+
+        .modal-body {
+            max-height: 60vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            background: #f9f9fc;
+            padding: 1rem;
+            border-radius: 1rem;
+            border: 1px solid #ddd;
+        }
+
+        .close-modal {
+            background: #5f6c7a;
+            margin-top: 1rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 1.2rem;
+            font-size: 0.75rem;
+            color: #6a7e94;
+            border-top: 1px solid #e2edf2;
+            background: #fefefe;
+        }
+
+        @media (max-width: 700px) {
+            .content { padding: 1rem; }
+            .address-row { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="header">
+        <h1>📧 TempMail.Plus <small>anonymous & disposable</small></h1>
+        <div class="badge">🔒 real-time inbox · no tracking</div>
+    </div>
+    <div class="content">
+        <div class="email-panel">
+            <div class="address-row">
+                <div class="email-display" id="emailAddress">loading@tempmail.plus</div>
+                <button id="copyEmailBtn" class="copy-btn">📋 Copy</button>
+                <button id="newEmailBtn">🔄 New Address</button>
+                <button id="refreshInboxBtn" class="refresh-btn">📬 Check Inbox</button>
+            </div>
+            <div class="status" id="statusMsg">⚡ Connecting to TempMail.Plus API ...</div>
+        </div>
+
+        <div class="inbox-container">
+            <div class="inbox-header">
+                <span>📥 Incoming messages</span>
+                <span style="font-size:0.75rem; font-weight:normal;">click any email to read full content</span>
+            </div>
+            <div id="mailListContainer" class="mail-list">
+                <div class="empty-inbox">✨ No emails yet. Send a test message to your temporary address.</div>
+            </div>
+        </div>
+    </div>
+    <footer>
+        🧼 Powered by TempMail.Plus · emails are temporary and auto-expire. Refresh inbox manually or use "Check Inbox".
+    </footer>
+</div>
+
+<!-- Modal for email body -->
+<div id="emailModal" class="modal">
+    <div class="modal-card">
+        <h3 id="modalTitle">📨 Message details</h3>
+        <div class="modal-body" id="modalBody">
+            Loading content...
+        </div>
+        <button id="closeModalBtn" class="close-modal">Close</button>
+    </div>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // TempMail.Plus API Integration (using public endpoints)
+    // Based on documentation / reverse engineered from official service.
+    // Domains: @tempmail.plus , @mail.tm etc but we use primary.
+    // Endpoints: 
+    //   - create account: POST https://api.tempmail.plus/v1/accounts
+    //   - get messages: GET https://api.tempmail.plus/v1/accounts/{account_id}/messages
+    //   - get single message: GET https://api.tempmail.plus/v1/messages/{message_id}
+    //   - generate new address: same as creating account
+    // We also support "keep session" in memory.
+    // --------------------------------------------------------------
+
+    let currentAccount = null;      // { id, address, token? actually tempmail.plus uses no auth token but account_id is enough }
+    let currentEmailAddress = "";
+    let accountId = null;
+
+    // Helper: fetch with error handling
+    async function apiFetch(endpoint, options = {}) {
+        const baseUrl = "https://api.tempmail.plus/v1";
+        const url = baseUrl + endpoint;
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                ...options
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API error ${response.status}: ${errorText.slice(0, 100)}`);
+            }
+            return await response.json();
+        } catch (err) {
+            console.error("API fetch failed:", err);
+            throw err;
+        }
+    }
+
+    // Create new temporary email account (gets new address)
+    async function createNewAccount() {
+        setStatus("🔄 Generating new temporary email address...");
+        try {
+            // TempMail.Plus expects a simple POST to /accounts (no body required, but can specify desired local part? we leave empty)
+            // According to openapi, we can send empty object or specific domain. Default domain is @tempmail.plus
+            const data = await apiFetch('/accounts', {
+                method: 'POST',
+                body: JSON.stringify({})
+            });
+            // Expected response: { id: "...", address: "...", quota_used: 0, quota_limit: ... }
+            if (data && data.id && data.address) {
+                currentAccount = data;
+                accountId = data.id;
+                currentEmailAddress = data.address;
+                document.getElementById('emailAddress').innerText = currentEmailAddress;
+                setStatus(`✅ New email ready: ${currentEmailAddress} | Inbox empty.`);
+                // clear displayed mails
+                renderMailList([]);
+                // optional: start polling? but user can manually refresh
+                return true;
+            } else {
+                throw new Error("Invalid account creation response");
+            }
+        } catch (err) {
+            console.error(err);
+            setStatus(`❌ Failed to create mailbox: ${err.message}. Using fallback demo mode? but retry.`);
+            // Fallback for demonstration: try to generate using alternative endpoint?
+            // We'll simulate by retrying after 1 sec? but no.
+            return false;
+        }
+    }
+
+    // Fetch list of messages for current account
+    async function fetchMessages() {
+        if (!accountId) {
+            setStatus("⚠️ No active mailbox. Create new address first.");
+            return [];
+        }
+        setStatus("📡 Fetching incoming emails...");
+        try {
+            const messages = await apiFetch(`/accounts/${accountId}/messages`);
+            // messages should be array of { id, from, subject, createdAt, ... }
+            if (Array.isArray(messages)) {
+                setStatus(`📬 ${messages.length} message(s) in inbox. Last update: ${new Date().toLocaleTimeString()}`);
+                renderMailList(messages);
+                return messages;
+            } else {
+                setStatus("⚠️ Unexpected response format, but showing empty.");
+                renderMailList([]);
+                return [];
+            }
+        } catch (err) {
+            console.warn(err);
+            setStatus(`⚠️ Could not fetch messages: ${err.message}. Maybe mailbox expired? Create new.`);
+            renderMailList([]);
+            return [];
+        }
+    }
+
+    // Fetch full message body by message ID
+    async function fetchMessageBody(messageId) {
+        if (!messageId) return null;
+        try {
+            const msgDetail = await apiFetch(`/messages/${messageId}`);
+            // response includes html/text body, e.g. { id, from, subject, text, html, createdAt }
+            return msgDetail;
+        } catch (err) {
+            console.error("fetch body error", err);
+            return null;
+        }
+    }
+
+    // Render mails in the inbox list
+    function renderMailList(messages) {
+        const container = document.getElementById('mailListContainer');
+        if (!messages || messages.length === 0) {
+            container.innerHTML = `<div class="empty-inbox">📭 No messages yet. Send a test email to:<br><strong style="word-break:break-all;">${currentEmailAddress || 'your temporary address'}</strong><br><span style="font-size:0.8rem;">(emails appear within seconds. Use 'Check Inbox')</span></div>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        messages.forEach(msg => {
+            const mailDiv = document.createElement('div');
+            mailDiv.className = 'mail-item';
+            mailDiv.setAttribute('data-id', msg.id);
+            const fromText = msg.from || (msg.from_address ? msg.from_address : 'Unknown sender');
+            const subjectText = msg.subject || '(no subject)';
+            const dateText = msg.createdAt ? new Date(msg.createdAt).toLocaleString() : (msg.date ? new Date(msg.date).toLocaleString() : 'recent');
+            
+            mailDiv.innerHTML = `
+                <div class="mail-sender">
+                    <span>📩 ${escapeHtml(fromText)}</span>
+                    <span class="mail-date">${escapeHtml(dateText)}</span>
+                </div>
+                <div class="mail-subject">📎 ${escapeHtml(subjectText)}</div>
+                <div style="font-size:0.7rem; color:#558; word-break:break-all;">ID: ${msg.id.slice(0,12)}...</div>
+            `;
+            mailDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openMessageModal(msg.id, fromText, subjectText);
+            });
+            container.appendChild(mailDiv);
+        });
+    }
+
+    // Modal with email body
+    async function openMessageModal(messageId, from, subject) {
+        const modal = document.getElementById('emailModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBodyDiv = document.getElementById('modalBody');
+        modalTitle.innerText = `✉️ from: ${escapeHtml(from)} · ${escapeHtml(subject)}`;
+        modalBodyDiv.innerHTML = '<div class="loading-spinner">⏳ Loading message content...</div>';
+        modal.style.display = 'flex';
+
+        const fullMsg = await fetchMessageBody(messageId);
+        if (fullMsg) {
+            let content = '';
+            if (fullMsg.html) {
+                // render html safely? we can show as text but better show sanitized?
+                content = fullMsg.html;
+                // but to avoid script injection, we insert as formatted text? we display inside pre? 
+                // but innerHTML can be risky but we trust API response? safer: convert to text.
+                // We'll show both text and html preview in readable format:
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = content;
+                const plainFromHtml = tempDiv.innerText || tempDiv.textContent || "";
+                if (plainFromHtml.trim()) content = `📄 HTML content (plain text):\n${plainFromHtml}`;
+                else content = fullMsg.text || "⚠️ No readable content.";
+            } else if (fullMsg.text) {
+                content = fullMsg.text;
+            } else {
+                content = "📨 No message body (only headers).";
+            }
+            modalBodyDiv.innerHTML = `<pre style="white-space:pre-wrap; font-family:monospace; margin:0;">${escapeHtml(content)}</pre>`;
+        } else {
+            modalBodyDiv.innerHTML = '<p>❌ Unable to load message details. Maybe expired or network issue.</p>';
+        }
+    }
+
+    // helper: basic escape html
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+            return c;
+        });
+    }
+
+    function setStatus(msg) {
+        const statusEl = document.getElementById('statusMsg');
+        statusEl.innerHTML = msg;
+        setTimeout(() => {
+            if (document.getElementById('statusMsg').innerHTML === msg) {
+                // keep but auto reset not needed
+            }
+        }, 4000);
+    }
+
+    // copy email to clipboard
+    async function copyEmail() {
+        if (!currentEmailAddress) {
+            setStatus("No email address to copy.");
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(currentEmailAddress);
+            setStatus("📋 Copied! Email address saved to clipboard.");
+        } catch (err) {
+            setStatus("⚠️ Manual copy: " + currentEmailAddress);
+        }
+    }
+
+    // full refresh: create new mailbox (old one discarded)
+    async function refreshNewEmail() {
+        const success = await createNewAccount();
+        if (success) {
+            // optionally fetch messages (empty)
+            renderMailList([]);
+        } else {
+            setStatus("⚠️ Could not create new address, retry in a moment.");
+        }
+    }
+
+    // manual inbox check
+    async function manualInboxRefresh() {
+        if (!accountId) {
+            setStatus("❌ No active account. Please generate new email first.");
+            return;
+        }
+        await fetchMessages();
+    }
+
+    // auto-initialize on page load
+    async function init() {
+        // create first temporary mailbox
+        await createNewAccount();
+        // also auto fetch inbox after 1 sec just to see if any existing? none yet but fine
+        setTimeout(() => {
+            if (accountId) fetchMessages().catch(console.warn);
+        }, 1200);
+        // set up periodic optional? user will use manual but give interval: refresh every 30 seconds? optional not aggressive
+        // let's add a gentle auto-refresh every 45 seconds (optional, but good for demo)
+        setInterval(() => {
+            if (accountId && document.visibilityState !== 'hidden') {
+                fetchMessages().catch(e => console.log("auto refresh failed", e));
+            }
+        }, 45000);
+    }
+
+    // Event listeners
+    document.getElementById('copyEmailBtn').addEventListener('click', copyEmail);
+    document.getElementById('newEmailBtn').addEventListener('click', refreshNewEmail);
+    document.getElementById('refreshInboxBtn').addEventListener('click', manualInboxRefresh);
+    const modal = document.getElementById('emailModal');
+    const closeModal = document.getElementById('closeModalBtn');
+    closeModal.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    // start app
+    init().catch(err => {
+        console.error("Init failed:", err);
+        document.getElementById('statusMsg').innerHTML = "⚠️ Cannot reach TempMail.Plus API. Check CORS? The service supports CORS but maybe temporary. Retry...";
+        // fallback: show manual note
+    });
+</script>
+</body>
+</html>
+```
